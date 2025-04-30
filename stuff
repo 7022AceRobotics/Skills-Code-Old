@@ -1,0 +1,300 @@
+#region VEXcode Generated Robot Configuration
+from vex import *
+import urandom
+
+# Brain should be defined by default
+brain=Brain()
+
+# Robot configuration code
+
+
+# wait for rotation sensor to fully initialize
+wait(30, MSEC)
+
+
+# Make random actually random
+def initializeRandomSeed():
+    wait(100, MSEC)
+    random = brain.battery.voltage(MV) + brain.battery.current(CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
+    urandom.seed(int(random))
+      
+# Set random seed 
+initializeRandomSeed()
+
+
+def play_vexcode_sound(sound_name):
+    # Helper to make playing sounds from the V5 in VEXcode easier and
+    # keeps the code cleaner by making it clear what is happening.
+    print("VEXPlaySound:" + sound_name)
+    wait(5, MSEC)
+
+# add a small delay to make sure we don't print in the middle of the REPL header
+wait(200, MSEC)
+# clear the console to make sure we don't have the REPL in the console
+print("\033[2J")
+
+#endregion VEXcode Generated Robot Configuration
+
+class Robot():
+    def __init__(self):
+
+        self.controller_to_rpm_calc = 200
+
+        # Used for Toggle
+        self.intake_running = False
+        self.intake_running_backwards = False
+        self.intake_pressed = False
+        self.tray_up = False
+
+        # Used for trigger
+        self.intake_forward_pressed = False
+        self.intake_backward_pressed = False
+
+        self.intake_not_activated = True
+
+        self.brain = Brain()
+
+        right_drive_motor_val = Ports.PORT2
+        left_drive_motor_val = Ports.PORT1
+        side_drive_motor_val = Ports.PORT3
+        lever_motor = Ports.PORT5
+
+        right_intake_motor = brain.three_wire_port.a
+        left_intake_motor = brain.three_wire_port.b
+        top_intake_motor = brain.three_wire_port.e
+        top_intake_servo = brain.three_wire_port.c
+        tray_release_servo = brain.three_wire_port.f
+
+
+
+        self.right_drive_motor = Motor(right_drive_motor_val, GearSetting.RATIO_18_1, False)
+        self.left_drive_motor = Motor(left_drive_motor_val, GearSetting.RATIO_18_1, False)
+        self.side_drive_motor = Motor(side_drive_motor_val, GearSetting.RATIO_18_1, False)
+        self.lever_motor = Motor(lever_motor, GearSetting.RATIO_18_1, False)
+
+        self.right_intake_motor = Motor29(right_intake_motor)
+        self.left_intake_motor = Motor29(left_intake_motor)
+        self.tray_release_servo = Servo(tray_release_servo)
+        self.top_intake_motor = Motor29(top_intake_motor)
+        self.top_intake_servo = Servo(top_intake_servo)
+
+
+        self.drive_train = DriveTrain(self.left_drive_motor, self.right_drive_motor, 104.02*math.pi, 381 - 26.3, 247.65, MM, 1)
+
+        self.controller = Controller()
+        
+        self.tray_release_servo.set_position(-270, DEGREES)
+        self.top_intake_servo.set_position(-45, DEGREES)
+
+        self.lever_motor.set_velocity(25, PERCENT)
+
+    def motor_move(self, l_reversed, r_reversed, s_reversed, l_speed, r_speed, s_speed):
+        self.left_drive_motor.set_reversed(l_reversed)
+        self.left_drive_motor.set_velocity(l_speed*self.controller_to_rpm_calc)
+        self.right_drive_motor.set_reversed(r_reversed != True)
+        self.right_drive_motor.set_velocity(r_speed*self.controller_to_rpm_calc)
+        self.side_drive_motor.set_reversed(s_reversed != True)
+        self.side_drive_motor.set_velocity(s_speed*self.controller_to_rpm_calc)
+        
+    def custom_drive(self):
+        #axis 1 is right axis, left and right
+        #axis 2 is right axis, up and down\
+        #axis 3 is left axis, left and right
+        #axis 4 is left axis, up and down
+        #THIS IS UPDATED
+        #controller is up to 100
+        axis_one = self.controller.axis1.position()/100
+        axis_two = self.controller.axis2.position()/100
+        axis_three = self.controller.axis3.position()/100
+        axis_four = self.controller.axis4.position()/100
+
+        axes_list = [axis_one, axis_two, axis_three, axis_four]
+        #self.brain.screen.clear_screen()
+        for j in range(len(axes_list)):
+            i = axes_list[j]
+            if i > 0.9 or i < -0.9 or (i< 0.18 and i > -0.18):
+                axes_list[j] = round(axes_list[j])
+
+        if (abs(axes_list[2])) > 0:
+            self.motor_move(False, False, False, axes_list[2], axes_list[2], 0)
+        elif (abs(axes_list[3])) > 0:
+            self.motor_move(False, False, False, 0, 0, axes_list[3])
+      
+        elif axes_list[2] == 0 and axes_list[3] == 0:
+            if axes_list[0] != 0:
+                val = False
+                if axes_list[1] >= 0:
+                    val = True
+                if axes_list[0] >= 0:
+                    self.motor_move(True,True,False, -(abs(axes_list[0])), (abs(axes_list[0])), 0)
+                else:
+                    self.motor_move(True,True,False, (abs(axes_list[0])), -(abs(axes_list[0])), 0)
+            else:
+                # if axes_list[0] < 0:
+                #     self.motor_move(True, True, False, (abs(axes_list[0])+abs(axes_list[1]))**2, -(abs(axes_list[0])+abs(axes_list[1]))**2, 0)
+                # else:
+                self.motor_move(False, False, False, 0, 0, 0)
+        
+        elif axes_list[3] == 0:
+            self.motor_move(False, False, False, axes_list[2], axes_list[2], 0)
+        elif axes_list[2] == 0:
+            self.motor_move(False, False, False, 0, 0, axes_list[3])
+
+        #self.custom_rotate_one(axes_list)
+
+        self.right_drive_motor.spin(FORWARD)
+        self.left_drive_motor.spin(FORWARD)
+        self.side_drive_motor.spin(FORWARD)
+
+    def custom_rotate_one(self, axes_list):
+        self.motor_move(True,False,False, axes_list[1], axes_list[2], 0)
+
+    def move_lever_up(self):
+        self.lever_motor.spin(REVERSE)
+
+    def move_lever_down(self):
+        self.lever_motor.spin(FORWARD)
+
+    def stop_lever(self):
+        self.lever_motor.stop()
+
+    def forward_intake_toggle(self):
+        if self.intake_pressed and not self.intake_running:
+            self.left_intake_motor.spin(REVERSE)
+            self.right_intake_motor.spin(REVERSE)
+            self.top_intake_motor.spin(FORWARD)
+            self.intake_pressed = False
+            self.intake_running = True
+            self.intake_running_backwards = False
+        else:
+            self.intake_pressed = False
+            self.intake_running = False
+            self.intake_running_backwards = False
+            self.stop_intake()
+
+    def backwards_intake_toggle(self):
+        if self.intake_pressed and not self.intake_running_backwards:
+            self.left_intake_motor.spin(FORWARD)
+            self.right_intake_motor.spin(FORWARD)
+            self.top_intake_motor.spin(REVERSE)
+            self.intake_pressed = False
+            self.intake_running = False
+            self.intake_running_backwards = True
+        else:
+            self.intake_pressed = False
+            self.intake_running = False
+            self.intake_running_backwards = False
+            self.stop_intake()
+
+    def forward_intake(self):
+        self.intake_forward_pressed = True
+        self.right_intake_motor.spin(FORWARD)
+        self.left_intake_motor.spin(FORWARD)
+        self.top_intake_motor.spin(REVERSE)
+
+
+    def backwards_intake(self):
+        self.intake_backward_pressed = True
+        self.right_intake_motor.spin(REVERSE)
+        self.left_intake_motor.spin(REVERSE)
+        self.top_intake_motor.spin(FORWARD)
+
+    def stop_intake(self):
+        self.left_intake_motor.stop()
+        self.right_intake_motor.stop()
+        self.top_intake_motor.stop()
+
+    def release_tray(self):
+        if self.tray_up == False:
+            self.tray_release_servo.set_position(90, DEGREES)
+            self.tray_up = True
+        elif self.tray_up == True:
+            self.tray_release_servo.set_position(-270, DEGREES)
+            self.tray_up = False
+    
+    def intake_motor(self):
+        if self.intake_not_activated:
+            self.top_intake_servo.set_position(25, DEGREES)
+            self.intake_not_activated = False
+        else:
+            self.top_intake_servo.set_position(-55, DEGREES)
+            self.intake_not_activated = True
+    
+    def set_intake_pressed(self):
+        self.intake_pressed = True
+
+    def set_intake_pressed_b(self):
+        self.intake_pressed = True
+
+    def set_intake_forward_false(self):
+        self.intake_forward_pressed = False
+
+    def set_intake_backward_false(self):
+        self.intake_backward_pressed = False
+
+
+
+    # def custom_rotate_two(self, axes_list):
+    #     if axes_list[2] > 0 and axes_list[3] > 0:
+    #         self.motor_move(False, True, False, (axes_list[2]**2 + axes_list[3]**2)**(1/2), (axes_list[2]**2 + axes_list[3]**2)**(1/2), 0)
+    #     elif axes_list[2] < 0 and axes_list[3] < 0:
+    #         self.motor_move(False, True, False, (axes_list[2]**2 + axes_list[3]**2)**(1/2), (axes_list[2]**2 + axes_list[3]**2)**(1/2), 0)
+    #     elif axes_list[2] < 0 and axes_list[3] > 0:
+    #         self.motor_move(True, True, True, axes_list[2], axes_list[2], axes_list[3])
+    #     elif axes_list[2] > 0 and axes_list[3] < 0:
+    #         self.motor_move(False, False, False, axes_list[2], axes_list[2], axes_list[3])
+
+    #     elif axes_list[3] == 0:
+    #         self.motor_move(False, False, False, axes_list[2], axes_list[2], 0)
+    #     elif axes_list[2] == 0:
+    #         self.motor_move(False, False, False, 0, 0, axes_list[3])
+    #     elif axis_three == 0 and axes_list[3] == 0:
+    #         self.motor_move(False, False, False, 0, 0, 0)
+    # def custom_rotate_three(self, axes_list):
+    #     self.motor_move(False,True,False, axes_list[3], axes_list[3], 0)
+
+    
+
+        
+
+#when_started1()
+
+robot = Robot()
+# Toggle
+# robot.controller.buttonR2.pressed(robot.set_intake_pressed)
+# robot.controller.buttonR1.pressed(robot.set_intake_pressed_b)
+# robot.controller.buttonR2.released(robot.forward_intake)
+# robot.controller.buttonR1.released(robot.backwards_intake)
+
+# Trigger
+#robot.controller.buttonR2.pressed(robot.forward_intake)
+#robot.controller.buttonR1.pressed(robot.backwards_intake)
+#robot.controller.buttonR2.released(robot.set_intake_forward_false)
+#robot.controller.buttonR1.released(robot.set_intake_backward_false)
+
+robot.controller.buttonL1.pressed(robot.move_lever_up)
+robot.controller.buttonL2.pressed(robot.move_lever_down)
+robot.controller.buttonL1.released(robot.stop_lever)
+robot.controller.buttonL2.released(robot.stop_lever)
+
+robot.controller.buttonDown.pressed(robot.release_tray)
+robot.controller.buttonUp.pressed(robot.intake_motor)
+
+#robot.controller.buttonA.pressed(robot.custom_height_start)
+#robot.controller.buttonA.released(robot.custom_height_stop)
+
+while True:
+    robot.custom_drive()
+    if robot.controller.buttonR2.pressing() == True:
+        robot.forward_intake()
+    elif robot.controller.buttonR1.pressing() == True:
+        robot.backwards_intake()
+    else:
+        robot.stop_intake()
+    #     robot.custom_shooter()
+    # else:
+    #     robot.custom_shooter_stop()
+    # if robot.controller.buttonA.pressing():
+    #     robot.custom_height_start()
+    # else:
+    #     robot.custom_height_stop()
